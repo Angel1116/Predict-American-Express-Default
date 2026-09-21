@@ -44,8 +44,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import (CAT_COLS, DATA_DIR, ID_COL, MISSING_LEVEL, NON_FEATURE_COLS,
-                    load_categories, save_categories)
+from config import (CAT_COLS, DATA_DIR, FEATURE_VERSION, ID_COL, MISSING_LEVEL,
+                    NON_FEATURE_COLS, load_categories, save_categories)
+from lineage import digest_of, fingerprint, record, split_id_of
 
 COL_BATCH = 40
 
@@ -101,6 +102,9 @@ def ensure_categories(path, force=False):
     print(f"Scanning {Path(path).name} for the category vocabulary...")
     categories = scan_categories(path)
     dst = save_categories(categories)
+    record(dst, source=fingerprint(path), split_id=split_id_of(path),
+           digest=digest_of(categories), produced_by="preprocess.scan_categories",
+           levels=sum(len(v) for v in categories.values()))
     for col in CAT_COLS:
         print(f"  {col:6s} {len(categories[col]):>2} levels  {categories[col]}")
     print(f"  wrote {dst.name}")
@@ -206,6 +210,13 @@ def preprocess(src, dst=None, categories=None):
 
     table = pa.Table.from_pandas(out, preserve_index=False)
     pq.write_table(table, dst, compression="zstd", compression_level=9)
+
+    # inherits the split it came from, so train.py can refuse to pair files
+    # that were cut from the data in two different ways
+    record(dst, source=fingerprint(src), split_id=split_id_of(src),
+           categories_digest=digest_of(categories),
+           feature_version=FEATURE_VERSION, produced_by="preprocess.py",
+           customers=len(out), features=len(out.columns) - 1)
 
     print(f"  categorical _last columns: {[f'{c}_last' for c in CAT_COLS]}")
     print(f"  {n_rows_in:,} rows -> {len(out):,} rows, "

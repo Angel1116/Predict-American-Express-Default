@@ -40,6 +40,7 @@ from sklearn.model_selection import train_test_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DATA_DIR, ID_COL, SEED, TARGET_COL
+from lineage import fingerprint, make_split_id, record
 
 SPLIT_NAMES = ["train", "validation", "test"]
 TEST_FRACTION = 0.1
@@ -215,6 +216,9 @@ def split_data(data_csv, id_groups, outdir, compression, level):
         print(f"warning: {len(overflowed)} column(s) exceeded the float16 range "
               f"and became infinite: {sorted(overflowed)[:10]}")
 
+    return {name: {"rows": writers[name].rows,
+                   "customers": len(writers[name].ids)} for name in SPLIT_NAMES}
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -234,8 +238,28 @@ def main():
     if not labels_csv.is_absolute():
         labels_csv = DATA_DIR / labels_csv
 
+    # names this particular cut of the data: source content + seed + ratios.
+    # Every artifact below inherits it, so a later run with a different seed
+    # cannot be silently mixed with these files.
+    ratios = {"train": round(1 - VALID_FRACTION - TEST_FRACTION, 4),
+              "validation": VALID_FRACTION, "test": TEST_FRACTION}
+    split_id = make_split_id(data_csv, args.seed, ratios)
+    data_source = fingerprint(data_csv)
+    labels_source = fingerprint(labels_csv)
+    print(f"split_id {split_id}  (seed {args.seed}, "
+          f"{data_source['name']} {data_source['digest']})\n")
+
     id_groups = split_labels(labels_csv, args.outdir, args.seed)
-    split_data(data_csv, id_groups, args.outdir, args.compression, args.compression_level)
+    stats = split_data(data_csv, id_groups, args.outdir,
+                       args.compression, args.compression_level)
+
+    for name in SPLIT_NAMES:
+        common = {"split_id": split_id, "seed": args.seed, "ratios": ratios,
+                  "produced_by": "split_data.py"}
+        record(f"{name}_labels.parquet", source=labels_source,
+               customers=len(id_groups[name]), **common)
+        record(f"{name}_data.parquet", source=data_source, **stats[name], **common)
+    print(f"\nlineage written for 6 artifacts under split_id {split_id}")
 
 
 if __name__ == "__main__":

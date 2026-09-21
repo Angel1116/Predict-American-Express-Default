@@ -55,7 +55,8 @@ def run_predict(args):
     predict(features,
             _in_data_dir(args.model) if args.model else None,
             labels,
-            _in_data_dir(args.output) or DATA_DIR / "predictions.parquet")
+            _in_data_dir(args.output) or DATA_DIR / "predictions.parquet",
+            args.run)
 
 
 def main():
@@ -84,8 +85,9 @@ def main():
                    help="labels to evaluate against (default: %(default)s)")
     p.add_argument("--no-eval", action="store_true",
                    help="just score, for data that has no labels")
-    p.add_argument("--model", default=None,
-                   help="defaults to the seed named in config.py")
+    p.add_argument("--model", default=None, help="a booster file to use directly")
+    p.add_argument("--run", default=None,
+                   help="a run id from models/runs.jsonl (default: latest)")
     p.add_argument("--output", default=None,
                    help="where to write predictions (default: data/predictions.parquet)")
     p.add_argument("--force-preprocess", action="store_true")

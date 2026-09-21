@@ -32,7 +32,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (CAT_COLS, DATA_DIR, FEATURE_VERSION, ID_COL, MODEL_DIR,
                     SEED, TARGET_COL, cat_feature_names)
 from evaluation import amex_metric
+from lineage import digest_of, get, git_commit, require_same_split
 from preprocess import ensure_categories, preprocess_if_missing
+from registry import list_runs, new_run_id, save_run
 
 NUM_BOOST_ROUND = 3000
 EARLY_STOPPING_ROUNDS = 200
@@ -107,6 +109,12 @@ def train_model(train_features, valid_features, train_labels=None,
     x_train, y_train = _load_xy(train_features, train_labels, "train")
     x_valid, y_valid = _load_xy(valid_features, valid_labels, "validation")
 
+    # same column names is not enough: two files can line up perfectly and
+    # still come from different cuts of the data
+    split_id = require_same_split(train_features, valid_features,
+                                  train_labels, valid_labels)
+    print(f"  split_id: {split_id}")
+
     if list(x_train.columns) != list(x_valid.columns):
         raise ValueError("train and validation features do not line up -- "
                          "rebuild both with the same category vocabulary "
@@ -139,25 +147,35 @@ def train_model(train_features, valid_features, train_labels=None,
     print(f"\n  best iteration: {model.best_iteration}")
     print(f"  final validation amex_metric: {best}")
 
-    MODEL_DIR.mkdir(exist_ok=True)
-    model_path = MODEL_DIR / f"lgbm_seed{SEED}.txt"
-    model.save_model(str(model_path), num_iteration=model.best_iteration)
-
-    meta_path = model_path.with_suffix(".json")
-    meta_path.write_text(json.dumps({
+    run_id = new_run_id(SEED)
+    meta = {
+        "run_id": run_id,
+        "git": git_commit(),
+        "split_id": split_id,
         "feature_version": FEATURE_VERSION,
         "feature_name": model.feature_name(),
         "cat_features": cat_features,
         "cat_cols": CAT_COLS,
         "categories": categories,
+        "categories_digest": digest_of(categories) if categories else None,
         "best_iteration": model.best_iteration,
         "valid_amex": best,
         "params": LGB_PARAMS,
+        "params_digest": digest_of(LGB_PARAMS),
         "trained_on": Path(train_features).name,
         "validated_on": Path(valid_features).name,
-    }, indent=2))
+        "inputs": {Path(p).name: get(p) for p in (train_features, valid_features,
+                                                  train_labels, valid_labels)},
+    }
+    model_path = save_run(run_id, model, meta)
+    print(f"  run {run_id} -> {model_path.relative_to(MODEL_DIR.parent)}")
 
-    print(f"  saved {model_path.relative_to(MODEL_DIR.parent)} and {meta_path.name}")
+    history = list_runs()
+    if len(history) > 1:
+        best_so_far = max((r for r in history if r.get("score") is not None),
+                          key=lambda r: r["score"])
+        print(f"  {len(history)} runs recorded; best is {best_so_far['run_id']} "
+              f"at {best_so_far['score']:.6f}")
     return model
 
 
