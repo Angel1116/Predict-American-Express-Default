@@ -1,0 +1,25 @@
+# Data. all_data.csv alone is 16.4 GB and the parquet splits add another
+# 1.2 GB -- committing any of it would poison the history permanently, since
+# git keeps every blob it has ever seen even after a later `git rm`.
+data/
+
+# Trained artifacts. Regenerate with `python code/pipeline.py train`; when
+# these start mattering they belong in a model registry, not in git.
+models/
+
+# Scoring output
+predictions.parquet
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+.venv/
+venv/
+env/
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
