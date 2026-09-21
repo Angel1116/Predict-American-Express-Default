@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install -r requirements.txt
+
+      # The source data is not in git, so every test that needs a built
+      # parquet skips here. What still runs is the logic worth protecting on
+      # every push: fingerprinting, split ids, the run registry, and the
+      # guards that refuse to mix artifacts from different splits.
+      - run: python -m pytest -v
