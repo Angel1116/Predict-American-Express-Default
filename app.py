@@ -19,6 +19,7 @@ import lightgbm as lgb
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import HTMLResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "code"))
 from config import FEATURE_VERSION, ID_COL, TARGET_COL, load_categories
@@ -62,6 +63,14 @@ CATEGORIES = load_categories()
 FEATURES = model.feature_name()
 
 print(f"loaded run {RUN_ID}: {model.num_trees()} trees, {len(FEATURES)} features")
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def home():
+    """The two-step page. Kept out of the schema -- it is a page, not an API."""
+    page = (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+    return (page.replace("{{RUN_ID}}", RUN_ID)
+                .replace("{{N_FEATURES}}", str(len(FEATURES))))
 
 
 def _read_upload(upload, contents):

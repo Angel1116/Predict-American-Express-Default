@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>American Express - Default Prediction</title>
+<style>
+  :root {
+    --page:      #f2f3f5;
+    --card:      #ffffff;
+    --ink:       #16181d;
+    --ink-2:     #5b6069;
+    --ink-3:     #8b9099;
+    --line:      #e2e4e8;
+    --line-2:    #cfd3d9;
+    --accent:    #2a78d6;
+    --accent-d:  #1d5aa4;
+    --accent-bg: #eaf2fc;
+    --good:      #0f6e56;
+    --good-bg:   #e4f4ee;
+    --bad:       #a32d2d;
+    --bad-bg:    #fbeded;
+    --radius:    10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 40px 24px 64px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, "Noto Sans TC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+  }
+  h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .model {
+    font-size: 13px; color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .model b { color: var(--ink-2); font-weight: 500; }
+
+  .steps {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px 22px 24px;
+    display: flex; flex-direction: column; min-height: 420px;
+  }
+  .card[aria-disabled="true"] { opacity: 0.55; }
+
+  .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .step {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--accent);
+    background: var(--accent-bg); padding: 3px 8px; border-radius: 5px;
+  }
+  h2 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
+  .lede { color: var(--ink-2); font-size: 13.5px; margin: 6px 0 18px; }
+
+  .drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 30px 20px; text-align: center; cursor: pointer;
+    border: 1.5px dashed var(--line-2); border-radius: var(--radius);
+    background: #fbfbfc; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-bg); }
+  .drop.filled { border-style: solid; border-color: var(--accent); background: var(--accent-bg); }
+  .card[aria-disabled="true"] .drop { cursor: not-allowed; }
+  .drop svg { width: 30px; height: 30px; color: var(--ink-3); }
+  .drop.filled svg { color: var(--accent); }
+  .drop-title { font-size: 14.5px; font-weight: 500; }
+  .drop-sub {
+    font-size: 12.5px; color: var(--ink-3);
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+
+  .run {
+    margin-top: 14px; width: 100%; padding: 11px 16px; font: inherit;
+    font-size: 14px; font-weight: 500; color: #fff; background: var(--accent);
+    border: none; border-radius: 8px; cursor: pointer; transition: background .15s;
+  }
+  .run:hover:not(:disabled) { background: var(--accent-d); }
+  .run:disabled { background: var(--line-2); cursor: not-allowed; }
+
+  .out { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .out h3 {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px;
+  }
+  .out p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+
+  .result { margin-top: 12px; }
+
+  .metric { display: flex; align-items: baseline; gap: 12px; }
+  .metric .value {
+    font-size: 42px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--good); font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .metric .label { font-size: 13px; color: var(--ink-2); }
+
+  .meta {
+    margin-top: 10px; font-size: 12.5px; color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .download {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; font-size: 14px; font-weight: 500;
+    color: var(--good); background: var(--good-bg);
+    border: 1px solid #bfe3d6; border-radius: 8px; text-decoration: none;
+  }
+  .download:hover { background: #d7ede5; }
+  .download svg { width: 16px; height: 16px; }
+
+  .error {
+    padding: 11px 13px; border-radius: 8px; font-size: 13.5px;
+    color: var(--bad); background: var(--bad-bg); border: 1px solid #f2d2d2;
+    overflow-wrap: anywhere;
+  }
+
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; vertical-align: -2px;
+    border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    margin-top: 26px; font-size: 12.5px; color: var(--ink-3);
+  }
+  footer a { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>American Express &mdash; Default Prediction</h1>
+    <div class="model">model run <b id="run-id">{{RUN_ID}}</b> &middot; <b id="n-features">{{N_FEATURES}}</b> features</div>
+  </header>
+
+  <div class="steps">
+
+    <section class="card" id="card-1">
+      <div class="head"><span class="step">Step 1</span><h2>Predict</h2></div>
+      <p class="lede">Upload statement rows &mdash; one row per customer per month.
+        The aggregation runs on the server.</p>
+
+      <label class="drop" id="drop-1">
+        <input type="file" id="file-data" accept=".parquet,.csv" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+        </svg>
+        <span class="drop-title" id="label-1">Upload testing data</span>
+        <span class="drop-sub" id="sub-1">parquet or csv &middot; click or drag a file here</span>
+      </label>
+
+      <button class="run" id="run-1" disabled>Run prediction</button>
+
+      <div class="out">
+        <h3>Output</h3>
+        <p>A csv with two columns: customer_ID and predicted_probability.</p>
+        <div class="result" id="result-1"></div>
+      </div>
+    </section>
+
+    <section class="card" id="card-2" aria-disabled="true">
+      <div class="head"><span class="step">Step 2</span><h2>Evaluate model performance</h2></div>
+      <p class="lede">Upload the true outcomes for the same customers to see how
+        well the model did.</p>
+
+      <label class="drop" id="drop-2">
+        <input type="file" id="file-labels" accept=".parquet,.csv" hidden disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+        </svg>
+        <span class="drop-title" id="label-2">Upload testing labels</span>
+        <span class="drop-sub" id="sub-2">finish step 1 first</span>
+      </label>
+
+      <button class="run" id="run-2" disabled>Evaluate</button>
+
+      <div class="out">
+        <h3>Output</h3>
+        <p>AUC &mdash; the area under the ROC curve. 0.5 is no better than
+          chance, 1.0 is perfect.</p>
+        <div class="result" id="result-2"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>Raw API and schema at <a href="/docs">/docs</a>.</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { data: null, labels: null, csvUrl: null };
+
+function wireDrop(dropId, inputId, onFile) {
+  const drop = $(dropId), input = $(inputId);
+  drop.addEventListener('click', (e) => { if (!input.disabled) { e.preventDefault(); input.click(); } });
+  input.addEventListener('change', () => input.files[0] && onFile(input.files[0]));
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => {
+    e.preventDefault(); if (!input.disabled) drop.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, (e) => {
+    e.preventDefault(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', (e) => {
+    if (input.disabled) return;
+    const f = e.dataTransfer.files[0];
+    if (f) { input.files = e.dataTransfer.files; onFile(f); }
+  });
+}
+
+const fileSize = (n) =>
+  n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB';
+
+function showFile(n, file) {
+  $('drop-' + n).classList.add('filled');
+  $('label-' + n).textContent = file.name;
+  $('sub-' + n).textContent = fileSize(file.size) + ' · click to choose another';
+}
+
+function busy(button, on, text) {
+  button.disabled = on;
+  button.innerHTML = on ? '<span class="spinner"></span>' + text : text;
+}
+
+async function failure(response) {
+  let detail = 'HTTP ' + response.status;
+  try {
+    const body = await response.json();
+    if (body && body.detail) detail = body.detail;
+  } catch (_) { /* a non-json error body is still worth showing as a status */ }
+  return detail;
+}
+
+wireDrop('drop-1', 'file-data', (file) => {
+  state.data = file;
+  showFile(1, file);
+  $('run-1').disabled = false;
+});
+
+wireDrop('drop-2', 'file-labels', (file) => {
+  state.labels = file;
+  showFile(2, file);
+  $('run-2').disabled = false;
+});
+
+$('run-1').addEventListener('click', async () => {
+  const out = $('result-1');
+  out.innerHTML = '';
+  busy($('run-1'), true, 'Scoring…');
+
+  try {
+    const body = new FormData();
+    body.append('file', state.data);
+    const response = await fetch('/predict', { method: 'POST', body });
+    if (!response.ok) throw new Error(await failure(response));
+
+    const blob = await response.blob();
+    if (state.csvUrl) URL.revokeObjectURL(state.csvUrl);
+    state.csvUrl = URL.createObjectURL(blob);
+
+    const scored = response.headers.get('X-Customers-Scored');
+    const name = 'predicted_' + state.data.name.replace(/\.[^.]+$/, '') + '.csv';
+    out.innerHTML =
+      '<a class="download" href="' + state.csvUrl + '" download="' + name + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/>' +
+      '<path d="M4 20h16"/></svg>Download ' + name + '</a>' +
+      (scored ? '<div class="meta">' + Number(scored).toLocaleString() +
+                ' customers scored</div>' : '');
+
+    // step 2 needs the same statements, so it only opens once they exist
+    $('card-2').setAttribute('aria-disabled', 'false');
+    $('file-labels').disabled = false;
+    $('sub-2').textContent = 'parquet or csv · click or drag a file here';
+  } catch (err) {
+    out.innerHTML = '<div class="error">' + err.message + '</div>';
+  } finally {
+    busy($('run-1'), false, 'Run prediction');
+  }
+});
+
+$('run-2').addEventListener('click', async () => {
+  const out = $('result-2');
+  out.innerHTML = '';
+  busy($('run-2'), true, 'Evaluating…');
+
+  try {
+    const body = new FormData();
+    body.append('data', state.data);
+    body.append('labels', state.labels);
+    const response = await fetch('/evaluate', { method: 'POST', body });
+    if (!response.ok) throw new Error(await failure(response));
+
+    const { auc } = await response.json();
+    const evaluated = response.headers.get('X-Customers-Evaluated');
+    const unmatched = Number(response.headers.get('X-Customers-Unmatched') || 0);
+
+    out.innerHTML =
+      '<div class="metric"><span class="value">' + auc.toFixed(4) +
+      '</span><span class="label">AUC</span></div>' +
+      '<div class="meta">' + Number(evaluated).toLocaleString() +
+      ' customers evaluated' +
+      (unmatched ? ' · ' + unmatched.toLocaleString() +
+                   ' had no matching label' : '') + '</div>';
+  } catch (err) {
+    out.innerHTML = '<div class="error">' + err.message + '</div>';
+  } finally {
+    busy($('run-2'), false, 'Evaluate');
+  }
+});
+</script>
+</body>
+</html>
