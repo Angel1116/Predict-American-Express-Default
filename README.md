@@ -1,6 +1,8 @@
 # AMEX Default Prediction
 
 ![Uploading image.png…]()
+The prediction model is deployed as a web API on Render and is available here:[Demo](https://predict-american-express-default.onrender.com/)
+
 
 A LightGBM pipeline for the American Express default prediction task. The pipeline aggregates each customer's monthly statement history into a single feature vector, trains a LightGBM model, and evaluates predictions using the competition metric.
 
