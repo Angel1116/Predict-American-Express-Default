@@ -1,5 +1,7 @@
 # AMEX Default Prediction
 
+![Uploading image.png…]()
+
 A LightGBM pipeline for the American Express default prediction task. The pipeline aggregates each customer's monthly statement history into a single feature vector, trains a LightGBM model, and evaluates predictions using the competition metric.
 
 The current test-set results, evaluated on customers that were not used for training or early stopping:
