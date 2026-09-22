@@ -214,7 +214,12 @@ const state = { data: null, labels: null, csvUrl: null };
 
 function wireDrop(dropId, inputId, onFile) {
   const drop = $(dropId), input = $(inputId);
-  drop.addEventListener('click', (e) => { if (!input.disabled) { e.preventDefault(); input.click(); } });
+
+  // No click handler on purpose. The <label> wraps the input, so clicking it
+  // already opens the picker; calling input.click() here as well re-enters
+  // this same handler through the bubbling synthetic click, and the browser
+  // suppresses the dialog rather than loop. A disabled input makes the label
+  // inert too, which is what keeps step 2 shut until step 1 has run.
   input.addEventListener('change', () => input.files[0] && onFile(input.files[0]));
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => {
     e.preventDefault(); if (!input.disabled) drop.classList.add('over');
