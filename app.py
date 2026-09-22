@@ -26,21 +26,27 @@ from evaluation import amex_metric
 from preprocess import aggregate_frame
 from registry import load_meta, resolve_model
 
-PREDICT = "PREDICTION NEW DATA"
-EVALUATE = "EVALUATION"
+PREDICT = "New Data Prediction"
+EVALUATE = "Predictive Performance (AUC)"
 
 app = FastAPI(
-    title="Amex default prediction",
-    # The models block at the foot of the page only ever lists the generated
-    # multipart bodies, which say nothing a file picker does not already show.
-    swagger_ui_parameters={"defaultModelsExpandDepth": -1},
+    title="American Express - Default Prediction",
+    description=(
+        "Upload monthly statement rows the way the raw data ships them -- one "
+        "row per customer per statement. The aggregation into per-customer "
+        "features runs here, with the same code that built the training set."
+    ),
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": -1,   # hide the generated multipart bodies
+        "tryItOutEnabled": True,          # skip the extra click before uploading
+    },
     openapi_tags=[
         {"name": PREDICT,
-         "description": "Upload statement rows. Get a csv back, one "
-                        "default probability per customer."},
+         "description": "Score customers whose outcome is not known yet. "
+                        "Returns a csv, one probability per customer."},
         {"name": EVALUATE,
-         "description": "Upload statement rows together with their known "
-                        "outcomes, and see how well the model did."},
+         "description": "Score customers whose outcome *is* known, and compare "
+                        "against it. Returns the AUC."},
     ],
 )
 
@@ -98,12 +104,16 @@ def _score(statements):
 @app.post(
     "/predict",
     tags=[PREDICT],
-    summary="Upload statement rows, download a csv of probabilities",
+    summary="Upload statements, download predictions as csv",
     response_class=Response,
-    responses={200: {"description": "csv: customer_ID, predicted_probability",
+    responses={200: {"description": "A csv with two columns: customer_ID and "
+                                    "predicted_probability.",
                      "content": {"text/csv": {}}}},
 )
-async def predict(file: UploadFile = File(..., description="statement-level parquet or csv")):
+async def predict(
+    file: UploadFile = File(
+        ..., description="Statement rows, parquet or csv. e.g. test_data.parquet"),
+):
     scores = _score(_read_upload(file, await file.read()))
     stem = Path(file.filename or "data").stem
     return Response(
@@ -120,21 +130,18 @@ async def predict(file: UploadFile = File(..., description="statement-level parq
 @app.post(
     "/evaluate",
     tags=[EVALUATE],
-    summary="Upload statement rows and their labels, see the AUC",
-    responses={200: {"description": "the model's score against the labels you supplied",
-                     "content": {"application/json": {"example": {
-                         "auc": 0.963055,
-                         "amex_score": 0.793863,
-                         "gini": 0.926109,
-                         "top4_capture": 0.661617,
-                         "customers_evaluated": 45892,
-                         "positive_rate": 0.2589,
-                         "run_id": "20260921-205141-s42",
-                     }}}}},
+    summary="Upload statements and their labels, get the AUC",
+    responses={200: {"description": "The area under the ROC curve, 0.5 being "
+                                    "no better than chance and 1.0 perfect.",
+                     "content": {"application/json": {
+                         "example": {"auc": 0.970396}}}}},
 )
 async def evaluate(
-    data: UploadFile = File(..., description="statement-level parquet or csv"),
-    labels: UploadFile = File(..., description="customer_ID and target"),
+    response: Response,
+    data: UploadFile = File(
+        ..., description="Statement rows, parquet or csv. e.g. test_data.parquet"),
+    labels: UploadFile = File(
+        ..., description="customer_ID and target. e.g. test_labels.parquet"),
 ):
     scores = _score(_read_upload(data, await data.read()))
     truth = _read_upload(labels, await labels.read())
@@ -155,16 +162,15 @@ async def evaluate(
         merged[["predicted_probability"]].rename(
             columns={"predicted_probability": "prediction"}).reset_index(drop=True))
 
-    return {
-        "auc": round(metric["auc"], 6),
-        "amex_score": round(metric["score"], 6),
-        "gini": round(metric["gini"], 6),
-        "top4_capture": round(metric["top4"], 6),
-        "customers_evaluated": len(merged),
-        "unmatched_customers": len(scores) - len(merged),
-        "positive_rate": round(float(merged[TARGET_COL].mean()), 4),
-        "run_id": RUN_ID,
-    }
+    # The body is the one number that was asked for, but an AUC computed on a
+    # subset because half the labels were missing looks exactly like one
+    # computed on everything. The headers keep that visible without putting it
+    # in the reader's way.
+    response.headers["X-Run-Id"] = RUN_ID
+    response.headers["X-Customers-Evaluated"] = str(len(merged))
+    response.headers["X-Customers-Unmatched"] = str(len(scores) - len(merged))
+
+    return {"auc": round(metric["auc"], 6)}
 
 
 def _openapi():
@@ -178,7 +184,8 @@ def _openapi():
         return app.openapi_schema
 
     schema = get_openapi(title=app.title, version=app.version,
-                         routes=app.routes, tags=app.openapi_tags)
+                         description=app.description, routes=app.routes,
+                         tags=app.openapi_tags)
     for path in schema.get("paths", {}).values():
         for operation in path.values():
             operation.get("responses", {}).pop("422", None)
