@@ -4,6 +4,10 @@ data/*
 # ...except the category vocabulary. It is 800 bytes, app.py reads it at
 # import, and a deployment that ships the model without it cannot start.
 !data/categories.json
+# ...and a 2,000-customer sample, so a visitor to the deployed page has
+# something to upload without a 16 GB download first.
+!data/demo_data.parquet
+!data/demo_labels.parquet
 
 # Trained artifacts. Rebuild them locally with `python code/pipeline.py train`.
 models/*

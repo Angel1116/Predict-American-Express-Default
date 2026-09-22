@@ -197,6 +197,25 @@ def _aggregate_categorical(df, codes, categories, verbose=True):
     return pd.concat(shares + lasts, axis="columns")
 
 
+def _already_ordered(codes, uniques, df):
+    """Are the rows grouped by customer and, within a customer, by date?
+
+    That is all the aggregation needs -- `last` only means the latest
+    statement while a customer's rows sit together in date order. Checking
+    costs one pass over two columns; sorting costs a copy of everything.
+    """
+    if len(codes) < 2:
+        return True
+    if len(uniques) != int((np.diff(codes) != 0).sum()) + 1:
+        return False
+    if DATE_COL not in df.columns:
+        return True
+
+    same_customer = codes[1:] == codes[:-1]
+    dates = df[DATE_COL].to_numpy()
+    return bool((dates[1:][same_customer] >= dates[:-1][same_customer]).all())
+
+
 def aggregate_frame(df, categories=None):
     """Collapse statement rows already in memory to one row per customer.
 
@@ -215,10 +234,14 @@ def aggregate_frame(df, categories=None):
     if missing:
         raise KeyError(f"missing required column(s): {missing}")
 
-    by = [ID_COL, DATE_COL] if DATE_COL in df.columns else [ID_COL]
-    df = df.sort_values(by, kind="stable").reset_index(drop=True)
-
     codes, uniques = pd.factorize(df[ID_COL])
+    if not _already_ordered(codes, uniques, df):
+        # sort_values copies the whole frame, which on a large upload is the
+        # single biggest allocation in the request -- so pay for it only when
+        # the rows actually need moving
+        by = [ID_COL, DATE_COL] if DATE_COL in df.columns else [ID_COL]
+        df = df.sort_values(by, kind="stable").reset_index(drop=True)
+        codes, uniques = pd.factorize(df[ID_COL])
     num_cols = [c for c in df.columns if c not in NON_FEATURE_COLS + CAT_COLS]
 
     num_agg = _aggregate_numeric(lambda cols: df[cols], num_cols, codes,

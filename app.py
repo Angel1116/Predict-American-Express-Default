@@ -12,6 +12,7 @@ never trained on.
 """
 
 import io
+import os
 import sys
 from pathlib import Path
 
@@ -19,13 +20,16 @@ import lightgbm as lgb
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "code"))
 from config import FEATURE_VERSION, ID_COL, TARGET_COL, load_categories
 from evaluation import amex_metric
 from preprocess import aggregate_frame
 from registry import load_meta, resolve_model
+
+# Sized for a 512 MB container. Raise it with the env var on a bigger one.
+MAX_UPLOAD_MB = float(os.environ.get("MAX_UPLOAD_MB", "40"))
 
 PREDICT = "New Data Prediction"
 EVALUATE = "Predictive Performance (AUC)"
@@ -73,17 +77,47 @@ def home():
                 .replace("{{N_FEATURES}}", str(len(FEATURES))))
 
 
-def _read_upload(upload, contents):
-    """Accept either of the two formats this project writes."""
-    try:
-        return pd.read_parquet(io.BytesIO(contents))
-    except Exception:
-        pass
-    try:
-        return pd.read_csv(io.BytesIO(contents))
-    except Exception as exc:
+SAMPLES = {"data": "demo_data.parquet", "labels": "demo_labels.parquet"}
+
+
+@app.get("/sample/{which}", include_in_schema=False)
+def sample(which: str):
+    """Hand out the bundled sample so the page is usable on its own."""
+    name = SAMPLES.get(which)
+    path = Path(__file__).parent / "data" / name if name else None
+    if path is None or not path.exists():
+        raise HTTPException(404, f"no sample named {which!r}")
+    return FileResponse(path, filename=name,
+                        media_type="application/octet-stream")
+
+
+async def _read_upload(upload):
+    """Accept either of the two formats this project writes, within budget."""
+    contents = await upload.read()
+    size_mb = len(contents) / 1e6
+
+    # A compressed statement file expands roughly six-fold once pandas has it
+    # -- float16 unpacks and every customer_ID becomes a python string. Past
+    # this the container runs out of memory and dies mid-request, which the
+    # caller sees as a 502 with nothing to act on. Better to say so.
+    if size_mb > MAX_UPLOAD_MB:
         raise HTTPException(
-            400, f"could not read {upload.filename} as parquet or csv: {exc}")
+            413,
+            f"{upload.filename} is {size_mb:.0f} MB; this instance accepts up "
+            f"to {MAX_UPLOAD_MB:.0f} MB. Score it in smaller batches, or run "
+            f"the pipeline locally with `python code/pipeline.py predict`.")
+
+    try:
+        frame = pd.read_parquet(io.BytesIO(contents))
+    except Exception:
+        try:
+            frame = pd.read_csv(io.BytesIO(contents))
+        except Exception as exc:
+            raise HTTPException(
+                400, f"could not read {upload.filename} as parquet or csv: {exc}")
+
+    del contents        # the parsed frame is the only copy worth keeping
+    return frame
 
 
 def _score(statements):
@@ -123,7 +157,7 @@ async def predict(
     file: UploadFile = File(
         ..., description="Statement rows, parquet or csv. e.g. test_data.parquet"),
 ):
-    scores = _score(_read_upload(file, await file.read()))
+    scores = _score(await _read_upload(file))
     stem = Path(file.filename or "data").stem
     return Response(
         content=scores.to_csv(index=False),
@@ -155,8 +189,8 @@ async def evaluate(
     labels: UploadFile = File(
         ..., description="customer_ID and target. e.g. test_labels.parquet"),
 ):
-    scores = _score(_read_upload(data, await data.read()))
-    truth = _read_upload(labels, await labels.read())
+    scores = _score(await _read_upload(data))
+    truth = await _read_upload(labels)
 
     if TARGET_COL not in truth.columns or ID_COL not in truth.columns:
         raise HTTPException(
