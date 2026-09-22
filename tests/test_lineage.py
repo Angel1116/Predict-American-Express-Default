@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from config import CATEGORIES_PATH, DATA_DIR
-from lineage import (digest_of, fingerprint, get, make_split_id,
-                     require_same_split, split_id_of)
+from lineage import (LINEAGE_PATH, digest_of, fingerprint, get,
+                     make_split_id, require_same_split, split_id_of)
 
 SPLITS = ["train", "validation", "test"]
 SPLIT_ARTIFACTS = ([f"{s}_labels.parquet" for s in SPLITS]
@@ -80,8 +80,13 @@ def test_preprocessed_files_inherit_their_source_split():
 
 
 def test_categories_records_the_file_it_was_scanned_from():
+    # categories.json ships with the repo but lineage.json does not, so the
+    # guard has to be on the record this reads, not on the file it describes
+    require(LINEAGE_PATH)
     require(CATEGORIES_PATH)
+
     entry = get(CATEGORIES_PATH)
+    assert entry is not None, "categories.json has no lineage entry"
     assert entry["source"]["name"] == "train_data.parquet", (
         "the vocabulary must come from train, never from a held-out split")
 
@@ -128,6 +133,5 @@ def test_predict_refuses_a_model_from_another_split(monkeypatch, tmp_path):
 
 
 def test_lineage_file_is_valid_json():
-    from lineage import LINEAGE_PATH
     require(LINEAGE_PATH)
     json.loads(LINEAGE_PATH.read_text())
