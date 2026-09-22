@@ -41,7 +41,10 @@
   .wrap { max-width: 1120px; margin: 0 auto; }
 
   header {
-    display: flex; align-items: flex-start; justify-content: space-between;
+    /* flex-end, not flex-start: the author block is two short lines against
+       a 25px title, so aligning their tops left it floating well above the
+       title it sits beside. Aligning the bottoms settles it. */
+    display: flex; align-items: flex-end; justify-content: space-between;
     gap: 20px; flex-wrap: wrap; margin-bottom: 26px;
   }
   h1 {
@@ -77,7 +80,9 @@
   }
   .card[aria-disabled="true"] { opacity: 0.52; box-shadow: none; }
 
-  .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  /* center, not baseline: an 11px badge and a 20px title share no useful
+     baseline, and sitting them on one puts the badge visibly high */
+  .head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
   .step {
     font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--accent);
