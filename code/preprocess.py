@@ -44,8 +44,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import (CAT_COLS, DATA_DIR, FEATURE_VERSION, ID_COL, MISSING_LEVEL,
-                    NON_FEATURE_COLS, load_categories, save_categories)
+from config import (CAT_COLS, DATA_DIR, DATE_COL, FEATURE_VERSION, ID_COL,
+                    MISSING_LEVEL, NON_FEATURE_COLS, load_categories,
+                    save_categories)
 from lineage import digest_of, fingerprint, record, split_id_of
 
 COL_BATCH = 40
@@ -128,11 +129,19 @@ def _read_ids(path):
     return codes, uniques
 
 
-def _aggregate_numeric(path, num_cols, codes):
+def _aggregate_numeric(read_batch, num_cols, codes, verbose=True):
+    """Aggregate the numeric columns a batch at a time.
+
+    `read_batch(cols)` hands back those columns as a frame -- off disk for a
+    file, or a slice of one already in memory for a request. Batching keeps
+    peak memory flat regardless of how wide the input is, and routing both
+    callers through here is what stops the file path and the serving path
+    from drifting into two different definitions of the same feature.
+    """
     parts = []
     for i in range(0, len(num_cols), COL_BATCH):
         batch = num_cols[i:i + COL_BATCH]
-        df = pq.read_table(path, columns=batch).to_pandas()
+        df = read_batch(batch).copy()
         df.insert(0, "_g", codes)
 
         agg = df.groupby("_g", sort=True)[batch].agg(["mean", "max", "last"])
@@ -147,13 +156,13 @@ def _aggregate_numeric(path, num_cols, codes):
 
         parts.append(pd.concat([agg, diff], axis="columns").astype("float32"))
         del df, agg, diff
-        print(f"  numeric {min(i + COL_BATCH, len(num_cols))}/{len(num_cols)} columns",
-              flush=True)
+        if verbose:
+            print(f"  numeric {min(i + COL_BATCH, len(num_cols))}/{len(num_cols)} columns",
+                  flush=True)
     return pd.concat(parts, axis="columns")
 
 
-def _aggregate_categorical(path, codes, categories):
-    df = pq.read_table(path, columns=CAT_COLS).to_pandas()
+def _aggregate_categorical(df, codes, categories, verbose=True):
     shares, lasts = [], []
 
     for col in CAT_COLS:
@@ -167,9 +176,10 @@ def _aggregate_categorical(path, codes, categories):
         unknown = pd.isna(cat)
         if unknown.any():
             seen = sorted(set(labels[unknown]), key=_level_order)
-            print(f"  warning: {col} has {unknown.sum():,} row(s) at level(s) "
-                  f"{seen[:5]} not in the training vocabulary, folded into "
-                  f"'{MISSING_LEVEL}'")
+            if verbose:
+                print(f"  warning: {col} has {unknown.sum():,} row(s) at level(s) "
+                      f"{seen[:5]} not in the training vocabulary, folded into "
+                      f"'{MISSING_LEVEL}'")
             cat = pd.Categorical(labels.mask(unknown, MISSING_LEVEL),
                                  categories=levels)
 
@@ -187,6 +197,40 @@ def _aggregate_categorical(path, codes, categories):
     return pd.concat(shares + lasts, axis="columns")
 
 
+def aggregate_frame(df, categories=None):
+    """Collapse statement rows already in memory to one row per customer.
+
+    The serving counterpart of preprocess(): same aggregation, same feature
+    names, same order, but fed a frame rather than a parquet path. A request
+    carries a handful of customers, so there is nothing to stream.
+
+    Unlike the file path this sorts defensively instead of demanding sorted
+    input. `last` means the latest statement, and a caller posting a
+    customer's months in whatever order their database returned them should
+    get the right answer rather than an error.
+    """
+    categories = categories if categories is not None else load_categories()
+
+    missing = [c for c in [ID_COL] + CAT_COLS if c not in df.columns]
+    if missing:
+        raise KeyError(f"missing required column(s): {missing}")
+
+    by = [ID_COL, DATE_COL] if DATE_COL in df.columns else [ID_COL]
+    df = df.sort_values(by, kind="stable").reset_index(drop=True)
+
+    codes, uniques = pd.factorize(df[ID_COL])
+    num_cols = [c for c in df.columns if c not in NON_FEATURE_COLS + CAT_COLS]
+
+    num_agg = _aggregate_numeric(lambda cols: df[cols], num_cols, codes,
+                                 verbose=False)
+    cat_agg = _aggregate_categorical(df[CAT_COLS], codes, categories,
+                                     verbose=False)
+
+    out = pd.concat([num_agg, cat_agg], axis="columns")
+    out.insert(0, ID_COL, uniques)
+    return out.reset_index(drop=True)
+
+
 def preprocess(src, dst=None, categories=None):
     """Collapse statement-level rows in `src` to one row per customer."""
     src = Path(src)
@@ -201,8 +245,10 @@ def preprocess(src, dst=None, categories=None):
     num_cols = [c for c in all_cols if c not in NON_FEATURE_COLS + CAT_COLS]
     print(f"  {len(num_cols)} numeric columns, {len(CAT_COLS)} categorical columns")
 
-    num_agg = _aggregate_numeric(src, num_cols, codes)
-    cat_agg = _aggregate_categorical(src, codes, categories)
+    num_agg = _aggregate_numeric(
+        lambda cols: pq.read_table(src, columns=cols).to_pandas(), num_cols, codes)
+    cat_agg = _aggregate_categorical(
+        pq.read_table(src, columns=CAT_COLS).to_pandas(), codes, categories)
 
     out = pd.concat([num_agg, cat_agg], axis="columns")
     out.insert(0, ID_COL, uniques.values)
