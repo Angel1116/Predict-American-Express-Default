@@ -1,6 +1,7 @@
 # AMEX Default Prediction
 
 ![Uploading image.png…]()
+
 The prediction model is deployed as a web API on Render and is available here:[Demo](https://predict-american-express-default.onrender.com/)
 
 
