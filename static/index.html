@@ -6,21 +6,24 @@
 <title>American Express - Default Prediction</title>
 <style>
   :root {
-    --page:      #f2f3f5;
+    /* Neutrals with a cool cast, and one blue. The only other hue is the
+       error red, which is reserved for that -- a palette stays serious by
+       spending colour on meaning rather than on decoration. */
+    --page:      #eceff3;
     --card:      #ffffff;
-    --ink:       #16181d;
-    --ink-2:     #5b6069;
-    --ink-3:     #8b9099;
-    --line:      #e2e4e8;
-    --line-2:    #cfd3d9;
-    --accent:    #2a78d6;
-    --accent-d:  #1d5aa4;
-    --accent-bg: #eaf2fc;
-    --good:      #0f6e56;
-    --good-bg:   #e4f4ee;
-    --bad:       #a32d2d;
-    --bad-bg:    #fbeded;
-    --radius:    10px;
+    --ink:       #101319;
+    --ink-2:     #4a5260;
+    --ink-3:     #79828f;
+    --line:      #dde2e8;
+    --line-2:    #c4cbd4;
+    --accent:    #1b5a9e;
+    --accent-d:  #143f70;
+    --accent-bg: #eaf1f8;
+    --bad:       #9f2f2f;
+    --bad-bg:    #fbeeee;
+    --bad-line:  #eed2d2;
+    --shadow:    0 1px 2px rgba(16, 19, 25, .05), 0 2px 10px rgba(16, 19, 25, .04);
+    --radius:    8px;
   }
 
   * { box-sizing: border-box; }
@@ -38,15 +41,25 @@
   .wrap { max-width: 1120px; margin: 0 auto; }
 
   header {
-    display: flex; align-items: baseline; justify-content: space-between;
-    gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; flex-wrap: wrap; margin-bottom: 26px;
   }
-  h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  h1 {
+    font-size: 25px; font-weight: 600; letter-spacing: -0.012em;
+    margin: 0 0 5px; color: var(--ink);
+  }
   .model {
-    font-size: 13px; color: var(--ink-3);
+    font-size: 12.5px; color: var(--ink-3);
     font-variant-numeric: tabular-nums;
   }
   .model b { color: var(--ink-2); font-weight: 500; }
+
+  .author { text-align: right; line-height: 1.4; }
+  .author .k {
+    display: block; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-3);
+  }
+  .author .v { font-size: 14.5px; font-weight: 500; color: var(--ink-2); }
 
   .steps {
     display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
@@ -57,15 +70,16 @@
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: var(--radius); padding: 22px 22px 24px;
+    box-shadow: var(--shadow);
     display: flex; flex-direction: column; min-height: 420px;
   }
-  .card[aria-disabled="true"] { opacity: 0.55; }
+  .card[aria-disabled="true"] { opacity: 0.52; box-shadow: none; }
 
   .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
   .step {
-    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--accent);
-    background: var(--accent-bg); padding: 3px 8px; border-radius: 5px;
+    background: var(--accent-bg); padding: 4px 8px; border-radius: 4px;
   }
   h2 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
   .lede { color: var(--ink-2); font-size: 13.5px; margin: 6px 0 18px; }
@@ -73,8 +87,8 @@
   .drop {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 30px 20px; text-align: center; cursor: pointer;
-    border: 1.5px dashed var(--line-2); border-radius: var(--radius);
-    background: #fbfbfc; transition: border-color .15s, background .15s;
+    border: 1.5px dashed var(--line-2); border-radius: 7px;
+    background: #f8fafb; transition: border-color .15s, background .15s;
   }
   .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-bg); }
   .drop.filled { border-style: solid; border-color: var(--accent); background: var(--accent-bg); }
@@ -89,11 +103,12 @@
 
   .run {
     margin-top: 14px; width: 100%; padding: 11px 16px; font: inherit;
-    font-size: 14px; font-weight: 500; color: #fff; background: var(--accent);
-    border: none; border-radius: 8px; cursor: pointer; transition: background .15s;
+    font-size: 13.5px; font-weight: 500; letter-spacing: 0.01em;
+    color: #fff; background: var(--accent);
+    border: none; border-radius: 6px; cursor: pointer; transition: background .15s;
   }
   .run:hover:not(:disabled) { background: var(--accent-d); }
-  .run:disabled { background: var(--line-2); cursor: not-allowed; }
+  .run:disabled { background: #b9c0ca; cursor: not-allowed; }
 
   .out { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
   .out h3 {
@@ -104,12 +119,17 @@
 
   .result { margin-top: 12px; }
 
-  .metric { display: flex; align-items: baseline; gap: 12px; }
+  .metric { display: flex; align-items: baseline; gap: 11px; }
   .metric .value {
-    font-size: 42px; font-weight: 600; letter-spacing: -0.02em;
-    color: var(--good); font-variant-numeric: tabular-nums; line-height: 1.1;
+    /* a measurement, not a verdict -- colouring it green would read as a
+       pass mark on a number that is only ever "this is what it scored" */
+    font-size: 44px; font-weight: 600; letter-spacing: -0.025em;
+    color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.05;
   }
-  .metric .label { font-size: 13px; color: var(--ink-2); }
+  .metric .label {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
 
   .meta {
     margin-top: 10px; font-size: 12.5px; color: var(--ink-3);
@@ -118,16 +138,17 @@
 
   .download {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 16px; font-size: 14px; font-weight: 500;
-    color: var(--good); background: var(--good-bg);
-    border: 1px solid #bfe3d6; border-radius: 8px; text-decoration: none;
+    padding: 10px 15px; font-size: 13.5px; font-weight: 500;
+    color: var(--accent); background: var(--accent-bg);
+    border: 1px solid #cfe0ef; border-radius: 6px; text-decoration: none;
+    overflow-wrap: anywhere;
   }
-  .download:hover { background: #d7ede5; }
-  .download svg { width: 16px; height: 16px; }
+  .download:hover { background: #dfeaf5; border-color: #b9d2e8; }
+  .download svg { width: 15px; height: 15px; flex: none; }
 
   .error {
-    padding: 11px 13px; border-radius: 8px; font-size: 13.5px;
-    color: var(--bad); background: var(--bad-bg); border: 1px solid #f2d2d2;
+    padding: 11px 13px; border-radius: 6px; font-size: 13.5px;
+    color: var(--bad); background: var(--bad-bg); border: 1px solid var(--bad-line);
     overflow-wrap: anywhere;
   }
 
@@ -148,16 +169,22 @@
 <div class="wrap">
 
   <header>
-    <h1>American Express &mdash; Default Prediction</h1>
-    <div class="model">model run <b id="run-id">{{RUN_ID}}</b> &middot; <b id="n-features">{{N_FEATURES}}</b> features</div>
+    <div>
+      <h1>American Express &mdash; Default Prediction</h1>
+      <div class="model">model run <b id="run-id">{{RUN_ID}}</b> &middot; <b id="n-features">{{N_FEATURES}}</b> features</div>
+    </div>
+    <div class="author">
+      <span class="k">Author</span>
+      <span class="v">Angel1116</span>
+    </div>
   </header>
 
   <div class="steps">
 
     <section class="card" id="card-1">
       <div class="head"><span class="step">Step 1</span><h2>Predict</h2></div>
-      <p class="lede">Upload statement rows &mdash; one row per customer per month.
-        The aggregation runs on the server.</p>
+      <p class="lede">Upload the raw test data, and the pipeline will automatically process it and predict each customer's default probability.
+      </p>
 
       <label class="drop" id="drop-1">
         <input type="file" id="file-data" accept=".parquet,.csv" hidden>
@@ -180,8 +207,8 @@
 
     <section class="card" id="card-2" aria-disabled="true">
       <div class="head"><span class="step">Step 2</span><h2>Evaluate model performance</h2></div>
-      <p class="lede">Upload the true outcomes for the same customers to see how
-        well the model did.</p>
+      <p class="lede">Upload the actual labels to evaluate how well the model ranks customers by default risk (AUC).
+        </p>
 
       <label class="drop" id="drop-2">
         <input type="file" id="file-labels" accept=".parquet,.csv" hidden disabled>
