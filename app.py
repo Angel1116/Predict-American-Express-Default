@@ -131,10 +131,13 @@ async def predict(
     "/evaluate",
     tags=[EVALUATE],
     summary="Upload statements and their labels, get the AUC",
+    # content: None keeps the docs page from carrying a made-up example.
+    # Leaving `responses` out entirely does the opposite of what that sounds
+    # like -- FastAPI then fills in a default json schema, and Swagger renders
+    # it as the placeholder "string". The real shape shows up under Execute.
     responses={200: {"description": "The area under the ROC curve, 0.5 being "
                                     "no better than chance and 1.0 perfect.",
-                     "content": {"application/json": {
-                         "example": {"auc": 0.970396}}}}},
+                     "content": None}},
 )
 async def evaluate(
     response: Response,
