@@ -1,0 +1,5 @@
+# LightGBM writes its own text format, but it is a model artifact, not
+# source. Leaving line-ending conversion on means the bytes git checks out on
+# Linux differ from the ones checked in on Windows -- harmless here, but not
+# something a file the model is loaded from should be exposed to at all.
+models/**/model.txt -text

@@ -1,11 +1,19 @@
-# Data. all_data.csv alone is 16.4 GB and the parquet splits add another
-# 1.2 GB -- committing any of it would poison the history permanently, since
-# git keeps every blob it has ever seen even after a later `git rm`.
-data/
+# Data. all_data.csv alone is 16.4 GB and git never forgets a blob, so this
+# has to be right before the first commit rather than after.
+data/*
+# ...except the category vocabulary. It is 800 bytes, app.py reads it at
+# import, and a deployment that ships the model without it cannot start.
+!data/categories.json
 
-# Trained artifacts. Regenerate with `python code/pipeline.py train`; when
-# these start mattering they belong in a model registry, not in git.
-models/
+# Trained artifacts. Rebuild them locally with `python code/pipeline.py train`.
+models/*
+# ...except the one run that is deployed, which has to travel with the code:
+# 6.4 MB, and a serving container with no model in it is just a crash. Ship a
+# different model by changing this line and the pin in app.py together, so
+# swapping what production scores with is a visible edit rather than a side
+# effect of retraining.
+!models/latest.json
+!models/20260921-205141-s42/
 
 # Scoring output
 predictions.parquet
