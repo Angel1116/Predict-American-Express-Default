@@ -63,7 +63,9 @@
 
   .steps {
     display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-    align-items: start;
+    /* stretch, so a result appearing on one side lifts both cards to the
+       same height instead of leaving one short */
+    align-items: stretch;
   }
   @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
 
@@ -81,8 +83,13 @@
     text-transform: uppercase; color: var(--accent);
     background: var(--accent-bg); padding: 4px 8px; border-radius: 4px;
   }
-  h2 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
-  .lede { color: var(--ink-2); font-size: 13.5px; margin: 6px 0 18px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.012em; }
+  .lede {
+    color: var(--ink-2); font-size: 13.5px; margin: 6px 0 18px;
+    /* two lines' worth, so the dividers below stay level even if one of
+       these blurbs is edited down to a single line */
+    min-height: 3.2em;
+  }
 
   .drop {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -299,7 +306,7 @@ wireDrop('drop-2', 'file-labels', (file) => {
 $('run-1').addEventListener('click', async () => {
   const out = $('result-1');
   out.innerHTML = '';
-  busy($('run-1'), true, 'Scoring…');
+  busy($('run-1'), true, 'Predicting…');
 
   try {
     const body = new FormData();
